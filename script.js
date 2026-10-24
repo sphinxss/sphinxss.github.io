@@ -371,6 +371,98 @@
     if (playing) restartTimer();
   }
 
+  /* ---------- Contact form ---------- */
+
+  const contactForm = document.getElementById("contactForm");
+
+  if (contactForm) {
+    const endpoint = contactForm.getAttribute("data-endpoint");
+    const submitBtn = document.getElementById("contactSubmit");
+    const submitLabel = submitBtn ? submitBtn.querySelector(".contact-submit-label") : null;
+    const formStatus = document.getElementById("formStatus");
+    const defaultLabel = submitLabel ? submitLabel.textContent : "Send message";
+
+    function setFormStatus(message, type) {
+      if (!formStatus) return;
+      formStatus.textContent = message;
+      formStatus.classList.remove("is-success", "is-error");
+      if (type) formStatus.classList.add("is-" + type);
+    }
+
+    contactForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      if (!contactForm.reportValidity()) return;
+
+      const honey = contactForm.querySelector('[name="_honey"]');
+      if (honey && honey.value.trim()) return;
+
+      if (!endpoint) {
+        setFormStatus("The form is unavailable. Please email me directly.", "error");
+        return;
+      }
+
+      const payload = {};
+      new FormData(contactForm).forEach(function (value, key) {
+        payload[key] = value;
+      });
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add("is-loading");
+      }
+      if (submitLabel) submitLabel.textContent = "Sending…";
+      setFormStatus("Sending your message…", "");
+
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      })
+        .then(function (response) {
+          return response.json().catch(function () { return {}; }).then(function (data) {
+            return { ok: response.ok, data: data };
+          });
+        })
+        .then(function (result) {
+          const message = String(result.data.message || result.data.error || "");
+          const activated = !/activation/i.test(message);
+          const succeeded =
+            result.ok &&
+            activated &&
+            result.data.success !== false &&
+            result.data.success !== "false";
+
+          if (!succeeded) {
+            throw new Error(message || "Message could not be delivered.");
+          }
+
+          contactForm.reset();
+          setFormStatus("Thanks — your message is on its way. I'll reply to the email you shared.", "success");
+          showToast("Message sent — thank you!");
+        })
+        .catch(function (error) {
+          const detail = String(error && error.message ? error.message : "");
+          if (/activation/i.test(detail)) {
+            setFormStatus("The form is waiting for one-time activation. Please email me directly at joshuabarrera659@gmail.com for now.", "error");
+          } else {
+            setFormStatus("I couldn't send that from here. Please email me directly at joshuabarrera659@gmail.com.", "error");
+          }
+          showToast("Message not sent — direct email is available below.");
+        })
+        .finally(function () {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove("is-loading");
+          }
+          if (submitLabel) submitLabel.textContent = defaultLabel;
+        });
+    });
+  }
+
   /* ---------- Copy email ---------- */
 
   const copyBtn = document.getElementById("copyEmail");
